@@ -23,7 +23,7 @@ class AdvanceExpiredQuestions extends Command
      *
      * @var string
      */
-    protected $description = 'Avanza la pregunta actual cuando su temporizador termina.';
+    protected $description = 'Avanza la pregunta actual cuando vence el tiempo o todos los participantes responden.';
 
     /**
      * Execute the console command.
@@ -37,7 +37,13 @@ class AdvanceExpiredQuestions extends Command
             ->each(function (Room $room): void {
                 $room->refresh();
 
-                if (! $room->isQuestionExpired()) {
+                $question = $room->currentQuestion();
+
+                if ($question === null) {
+                    return;
+                }
+
+                if (! $room->isQuestionExpired() && ! $room->allParticipantsAnswered($question)) {
                     return;
                 }
 

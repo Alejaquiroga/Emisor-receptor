@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Events\QuestionBroadcast;
 use App\Events\ScoreboardUpdated;
+use App\Models\Participant;
 use App\Models\Question;
 use App\Models\Room;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -29,6 +30,74 @@ class AdvanceExpiredQuestionsTest extends TestCase
         $this->assertSame(Room::STATUS_ACTIVE, $room->status);
         $this->assertSame(1, $room->current_question_index);
         $this->assertSame($questions[1]->id, $room->currentQuestion()?->id);
+        Event::assertDispatched(QuestionBroadcast::class);
+    }
+
+    public function test_it_advances_when_every_participant_has_answered(): void
+    {
+        Event::fake([QuestionBroadcast::class]);
+
+        $room = Room::factory()->active()->create(['seconds_per_question' => 60]);
+        $questions = Question::factory()->count(2)->for($room)->create();
+        $participants = Participant::factory()->count(2)->for($room)->create();
+
+        foreach ($participants as $participant) {
+            $participant->answers()->create([
+                'question_id' => $questions[0]->id,
+                'selected_option' => 0,
+                'is_correct' => true,
+            ]);
+        }
+
+        $room->update(['question_started_at' => now()->subSeconds(5)]);
+
+        $this->artisan('trivia:advance-expired')->assertSuccessful();
+
+        $this->assertSame(1, $room->fresh()->current_question_index);
+        Event::assertDispatched(QuestionBroadcast::class);
+    }
+
+    public function test_it_waits_when_only_some_participants_have_answered(): void
+    {
+        Event::fake([QuestionBroadcast::class]);
+
+        $room = Room::factory()->active()->create(['seconds_per_question' => 60]);
+        $questions = Question::factory()->count(2)->for($room)->create();
+        $participants = Participant::factory()->count(2)->for($room)->create();
+
+        $participants[0]->answers()->create([
+            'question_id' => $questions[0]->id,
+            'selected_option' => 0,
+            'is_correct' => true,
+        ]);
+
+        $room->update(['question_started_at' => now()->subSeconds(5)]);
+
+        $this->artisan('trivia:advance-expired')->assertSuccessful();
+
+        $this->assertSame(0, $room->fresh()->current_question_index);
+        Event::assertNotDispatched(QuestionBroadcast::class);
+    }
+
+    public function test_a_single_participant_advances_as_soon_as_they_answer(): void
+    {
+        Event::fake([QuestionBroadcast::class]);
+
+        $room = Room::factory()->active()->create(['seconds_per_question' => 60]);
+        $questions = Question::factory()->count(2)->for($room)->create();
+        $participant = Participant::factory()->for($room)->create();
+
+        $participant->answers()->create([
+            'question_id' => $questions[0]->id,
+            'selected_option' => 0,
+            'is_correct' => true,
+        ]);
+
+        $room->update(['question_started_at' => now()->subSeconds(5)]);
+
+        $this->artisan('trivia:advance-expired')->assertSuccessful();
+
+        $this->assertSame(1, $room->fresh()->current_question_index);
         Event::assertDispatched(QuestionBroadcast::class);
     }
 

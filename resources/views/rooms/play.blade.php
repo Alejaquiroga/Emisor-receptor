@@ -313,13 +313,14 @@
                 return;
             }
 
+            const answeredQuestionId = question.id;
             submitting = true;
             optionsEl.querySelectorAll('.option-button').forEach((button) => {
                 button.disabled = true;
             });
 
             try {
-                const response = await fetch(`${answerBaseUrl}${question.id}`, {
+                const response = await fetch(`${answerBaseUrl}${answeredQuestionId}`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -339,10 +340,18 @@
                     return;
                 }
 
-                myAnswer = { selected_option: optionIndex, is_correct: payload.is_correct };
-                correctOption = payload.correct_option;
+                // The room may have advanced while the answer was in flight.
+                // In that case, don't mark options on the new question.
+                if (question !== null && question.id === answeredQuestionId) {
+                    myAnswer = { selected_option: optionIndex, is_correct: payload.is_correct };
+                    correctOption = payload.correct_option;
+                    applyAnsweredStyles();
+                } else {
+                    myAnswer = null;
+                    correctOption = null;
+                }
+
                 updateScore(payload.score, payload.position);
-                applyAnsweredStyles();
                 showToast(
                     payload.is_correct ? `¡Correcto! +${payload.points} pts` : 'Respuesta incorrecta',
                     payload.is_correct ? 'success' : 'error',

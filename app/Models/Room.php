@@ -166,6 +166,22 @@ class Room extends Model
     }
 
     /**
+     * Whether every participant in the room has answered the question.
+     */
+    public function allParticipantsAnswered(Question $question): bool
+    {
+        $participantCount = $this->participants()->count();
+
+        if ($participantCount === 0) {
+            return false;
+        }
+
+        return $this->answers()
+            ->where('answers.question_id', $question->id)
+            ->count() >= $participantCount;
+    }
+
+    /**
      * Moment when the current question stops accepting answers.
      */
     public function questionEndsAt(): ?CarbonInterface
