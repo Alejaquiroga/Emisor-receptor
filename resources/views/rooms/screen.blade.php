@@ -333,7 +333,7 @@
                     return '<div class="w-44"></div>';
                 }
 
-                const medal = place === 1 ? '🥇' : place === 2 ? '🥈' : '🥉';
+                const medal = entry.medal ?? (place === 1 ? '🥇' : place === 2 ? '🥈' : '🥉');
 
                 return `
                     <div class="flex w-44 flex-col items-center gap-2">
@@ -360,7 +360,7 @@
             ranking.innerHTML = current.ranking.map((entry, index) => `
                 <li class="flex items-center justify-between gap-4 rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-2">
                     <span class="flex min-w-0 items-center gap-3">
-                        <span class="w-8 text-center font-mono text-slate-500">${index + 1}</span>
+                        <span class="w-8 text-center text-lg" title="${escapeHtml(entry.medal_label ?? '')}">${entry.medal ?? (index + 1)}</span>
                         <span class="truncate">${escapeHtml(entry.name)}</span>
                     </span>
                     <span class="font-mono text-slate-300">${entry.score} pts</span>

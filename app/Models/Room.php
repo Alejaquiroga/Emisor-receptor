@@ -25,6 +25,18 @@ class Room extends Model
         self::STATUS_FINISHED,
     ];
 
+    /**
+     * Medals for the top three places, in order.
+     *
+     * @var array<int, string>
+     */
+    private const MEDALS = ['🥇', '🥈', '🥉'];
+
+    /**
+     * @var array<int, string>
+     */
+    private const MEDAL_LABELS = ['Oro', 'Plata', 'Bronce'];
+
     protected $fillable = [
         'code',
         'title',
@@ -165,20 +177,34 @@ class Room extends Model
     /**
      * Participants ordered for the podium: highest score first, name as tie-breaker.
      *
-     * @return array<int, array{id: int, name: string, score: int, position: int}>
+     * Medals are awarded to the top three places, limited by the number of
+     * participants: one participant gets gold, two get gold and silver, and
+     * three or more get the full podium.
+     *
+     * @return array<int, array{id: int, name: string, score: int, position: int, medal: string|null, medal_label: string|null}>
      */
     public function ranking(): array
     {
-        return $this->participants()
+        $participants = $this->participants()
             ->orderByDesc('score')
             ->orderBy('name')
-            ->get()
-            ->map(fn (Participant $participant, int $index): array => [
-                'id' => $participant->id,
-                'name' => $participant->name,
-                'score' => $participant->score,
-                'position' => $index + 1,
-            ])
+            ->get();
+
+        $medalCount = min(count(self::MEDALS), $participants->count());
+
+        return $participants
+            ->map(function (Participant $participant, int $index) use ($medalCount): array {
+                $medal = $index < $medalCount ? self::MEDALS[$index] : null;
+
+                return [
+                    'id' => $participant->id,
+                    'name' => $participant->name,
+                    'score' => $participant->score,
+                    'position' => $index + 1,
+                    'medal' => $medal,
+                    'medal_label' => $medal === null ? null : self::MEDAL_LABELS[$index],
+                ];
+            })
             ->all();
     }
 }

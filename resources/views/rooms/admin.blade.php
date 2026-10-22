@@ -201,7 +201,7 @@
             podium.innerHTML = ranking.map((entry, index) => `
                 <li class="flex items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950/70 px-4 py-3">
                     <span class="flex min-w-0 items-center gap-3">
-                        <span class="w-6 text-center font-semibold ${positionClass(index)}">${index + 1}</span>
+                        <span class="w-7 text-center text-lg font-semibold ${positionClass(index)}" title="${escapeHtml(entry.medal_label ?? '')}">${entry.medal ?? (index + 1)}</span>
                         <span class="truncate">${escapeHtml(entry.name)}</span>
                     </span>
                     <span class="font-mono text-sm text-slate-300">${entry.score} pts</span>
