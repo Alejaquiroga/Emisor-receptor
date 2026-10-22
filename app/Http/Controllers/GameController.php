@@ -18,6 +18,8 @@ class GameController extends Controller
 {
     public const POINTS_PER_CORRECT = 100;
 
+    public const MAX_SPEED_BONUS = 100;
+
     public function play(Room $room, Participant $participant): View
     {
         abort_unless($participant->room_id === $room->id, 404);
@@ -51,6 +53,7 @@ class GameController extends Controller
         $room->update([
             'status' => Room::STATUS_ACTIVE,
             'current_question_index' => 0,
+            'question_started_at' => now(),
         ]);
 
         $question = $room->currentQuestion();
@@ -59,8 +62,8 @@ class GameController extends Controller
             return back()->withErrors(['room' => 'No se pudo cargar la primera pregunta.']);
         }
 
-        broadcast(new QuestionBroadcast($room, $question));
-        broadcast(new ScoreboardUpdated($room));
+        $this->broadcastSafely(new QuestionBroadcast($room, $question));
+        $this->broadcastSafely(new ScoreboardUpdated($room));
 
         return back()->with('ok', 'Trivia iniciada.');
     }
@@ -76,12 +79,15 @@ class GameController extends Controller
         if ($nextIndex >= $room->totalQuestions()) {
             $room->update(['status' => Room::STATUS_FINISHED]);
 
-            broadcast(new ScoreboardUpdated($room));
+            $this->broadcastSafely(new ScoreboardUpdated($room));
 
             return back()->with('ok', 'Trivia finalizada. Podio definitivo publicado.');
         }
 
-        $room->update(['current_question_index' => $nextIndex]);
+        $room->update([
+            'current_question_index' => $nextIndex,
+            'question_started_at' => now(),
+        ]);
 
         $question = $room->currentQuestion();
 
@@ -89,7 +95,7 @@ class GameController extends Controller
             return back()->withErrors(['room' => 'No se pudo cargar la siguiente pregunta.']);
         }
 
-        broadcast(new QuestionBroadcast($room, $question));
+        $this->broadcastSafely(new QuestionBroadcast($room, $question));
 
         return back()->with('ok', 'Siguiente pregunta publicada.');
     }
@@ -113,12 +119,16 @@ class GameController extends Controller
             return response()->json(['message' => 'Esta pregunta ya no está activa.'], 409);
         }
 
+        if ($room->isQuestionExpired()) {
+            return response()->json(['message' => 'Se acabó el tiempo para esta pregunta.'], 409);
+        }
+
         if ($participant->hasAnswered($question)) {
             return response()->json(['message' => 'Ya respondiste esta pregunta.'], 409);
         }
 
         $isCorrect = $data['selected_option'] === $question->correct_option;
-        $points = $isCorrect ? self::POINTS_PER_CORRECT : 0;
+        $points = $isCorrect ? $this->pointsForCorrectAnswer($room) : 0;
 
         try {
             DB::transaction(function () use ($participant, $question, $data, $isCorrect, $points): void {
@@ -138,7 +148,7 @@ class GameController extends Controller
 
         $participant->refresh();
 
-        broadcast(new ScoreboardUpdated($room));
+        $this->broadcastSafely(new ScoreboardUpdated($room));
 
         return response()->json([
             'is_correct' => $isCorrect,
@@ -147,5 +157,24 @@ class GameController extends Controller
             'score' => $participant->score,
             'position' => $participant->position(),
         ]);
+    }
+
+    /**
+     * Correct answers are worth a base amount plus a bonus that shrinks as the
+     * question window runs out: answering earlier is worth more.
+     */
+    private function pointsForCorrectAnswer(Room $room): int
+    {
+        $endsAt = $room->questionEndsAt();
+
+        if ($endsAt === null) {
+            return self::POINTS_PER_CORRECT;
+        }
+
+        $totalMs = max(1000, $room->seconds_per_question * 1000);
+        $remainingMs = max(0, $endsAt->getTimestampMs() - now()->getTimestampMs());
+        $ratio = min(1, $remainingMs / $totalMs);
+
+        return self::POINTS_PER_CORRECT + (int) round(self::MAX_SPEED_BONUS * $ratio);
     }
 }

@@ -18,6 +18,8 @@ class StoreRoomRequest extends FormRequest
     {
         return [
             'title' => ['required', 'string', 'max:120'],
+            'admin_password' => ['required', 'string', 'min:4', 'max:40'],
+            'seconds_per_question' => ['required', 'integer', 'between:5,120'],
             'questions' => ['required', 'array', 'min:1', 'max:50'],
             'questions.*.question_text' => ['required', 'string', 'max:255'],
             'questions.*.options' => ['required', 'array', 'size:4'],

@@ -26,6 +26,9 @@ class QuestionBroadcast implements ShouldBroadcastNow
             'status' => $this->room->status,
             'question_index' => $this->room->current_question_index,
             'total_questions' => $this->room->totalQuestions(),
+            'seconds_per_question' => $this->room->seconds_per_question,
+            'ends_at' => $this->room->questionEndsAt()?->toIso8601String(),
+            'server_now' => now()->toIso8601String(),
             'question' => [
                 'id' => $this->question->id,
                 'question_text' => $this->question->question_text,

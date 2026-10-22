@@ -23,12 +23,17 @@ class RoomFactory extends Factory
             'title' => fake()->sentence(3),
             'status' => Room::STATUS_WAITING,
             'current_question_index' => 0,
+            'seconds_per_question' => 30,
+            'question_started_at' => null,
         ];
     }
 
     public function active(): static
     {
-        return $this->state(['status' => Room::STATUS_ACTIVE]);
+        return $this->state([
+            'status' => Room::STATUS_ACTIVE,
+            'question_started_at' => now(),
+        ]);
     }
 
     public function finished(): static
