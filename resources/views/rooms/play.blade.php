@@ -21,7 +21,7 @@
         </header>
 
         <section id="waiting-state" class="rounded-2xl border border-slate-800 bg-slate-900/60 p-8 text-center @if ($room->status !== \App\Models\Room::STATUS_WAITING) hidden @endif">
-            <p class="text-lg font-medium">Esperando a que el administrador inicie la trivia…</p>
+            <p class="text-lg font-medium">Esperando a que comience la trivia…</p>
             <p class="mt-2 text-sm text-slate-400">
                 Mantén esta pantalla abierta. El código de la sala es
                 <span class="font-mono text-indigo-300">{{ $room->code }}</span>.

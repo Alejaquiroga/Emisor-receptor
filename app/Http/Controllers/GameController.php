@@ -42,24 +42,14 @@ class GameController extends Controller
 
     public function start(Room $room): RedirectResponse
     {
-        if ($room->questions()->count() === 0) {
-            return back()->withErrors(['room' => 'La sala no tiene preguntas para jugar.']);
-        }
-
         if ($room->status !== Room::STATUS_WAITING) {
             return back()->withErrors(['room' => 'La trivia ya fue iniciada.']);
         }
 
-        $room->update([
-            'status' => Room::STATUS_ACTIVE,
-            'current_question_index' => 0,
-            'question_started_at' => now(),
-        ]);
-
-        $question = $room->currentQuestion();
+        $question = $room->startGame();
 
         if ($question === null) {
-            return back()->withErrors(['room' => 'No se pudo cargar la primera pregunta.']);
+            return back()->withErrors(['room' => 'La sala no tiene preguntas para jugar.']);
         }
 
         $this->broadcastSafely(new QuestionBroadcast($room, $question));
@@ -74,20 +64,13 @@ class GameController extends Controller
             return back()->withErrors(['room' => 'La trivia no está en curso.']);
         }
 
-        $nextIndex = $room->current_question_index + 1;
+        $room->advanceQuestion();
 
-        if ($nextIndex >= $room->totalQuestions()) {
-            $room->update(['status' => Room::STATUS_FINISHED]);
-
+        if ($room->status === Room::STATUS_FINISHED) {
             $this->broadcastSafely(new ScoreboardUpdated($room));
 
             return back()->with('ok', 'Trivia finalizada. Podio definitivo publicado.');
         }
-
-        $room->update([
-            'current_question_index' => $nextIndex,
-            'question_started_at' => now(),
-        ]);
 
         $question = $room->currentQuestion();
 

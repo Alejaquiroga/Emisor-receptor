@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Events\QuestionBroadcast;
 use App\Events\ScoreboardUpdated;
 use App\Models\Participant;
 use App\Models\Question;
@@ -205,6 +206,55 @@ class RoomControllerTest extends TestCase
         $this->assertSame('Ana', $participant->name);
         $this->assertSame(0, $participant->score);
         Event::assertDispatched(ScoreboardUpdated::class);
+    }
+
+    public function test_first_participant_starts_the_room_automatically(): void
+    {
+        Event::fake([QuestionBroadcast::class, ScoreboardUpdated::class]);
+
+        $room = Room::factory()->create(['code' => 'ABC123']);
+        Question::factory()->for($room)->create([
+            'question_text' => '¿Qué indica HTTP 200?',
+            'options' => ['OK', 'Not Found', 'Server Error', 'Created'],
+            'correct_option' => 0,
+        ]);
+
+        $this->post(route('rooms.join.submit'), [
+            'code' => 'abc123',
+            'name' => 'Ana',
+        ])->assertRedirect();
+
+        $room->refresh();
+
+        $this->assertSame(Room::STATUS_ACTIVE, $room->status);
+        $this->assertSame(0, $room->current_question_index);
+        $this->assertNotNull($room->question_started_at);
+        Event::assertDispatched(QuestionBroadcast::class);
+        Event::assertDispatched(ScoreboardUpdated::class);
+    }
+
+    public function test_later_participants_do_not_restart_the_room(): void
+    {
+        Event::fake([QuestionBroadcast::class]);
+
+        $room = Room::factory()->create(['code' => 'ABC123']);
+        Question::factory()->for($room)->create();
+
+        $this->post(route('rooms.join.submit'), ['code' => 'ABC123', 'name' => 'Ana']);
+
+        $room->refresh();
+        $startedAt = $room->question_started_at;
+
+        $this->travel(5)->seconds();
+
+        $this->post(route('rooms.join.submit'), ['code' => 'ABC123', 'name' => 'Luis']);
+
+        $room->refresh();
+
+        $this->assertSame(2, $room->participants()->count());
+        $this->assertSame(Room::STATUS_ACTIVE, $room->status);
+        $this->assertTrue($startedAt->equalTo($room->question_started_at));
+        Event::assertDispatchedTimes(QuestionBroadcast::class, 1);
     }
 
     public function test_reuses_participant_when_name_is_taken_in_room(): void

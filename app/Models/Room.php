@@ -119,6 +119,53 @@ class Room extends Model
     }
 
     /**
+     * Start the game when the room is waiting and has questions.
+     *
+     * @return Question|null The first question, or null when the room cannot start.
+     */
+    public function startGame(): ?Question
+    {
+        if ($this->status !== self::STATUS_WAITING || $this->questions()->count() === 0) {
+            return null;
+        }
+
+        $this->update([
+            'status' => self::STATUS_ACTIVE,
+            'current_question_index' => 0,
+            'question_started_at' => now(),
+        ]);
+
+        return $this->currentQuestion();
+    }
+
+    /**
+     * Move to the next question, or finish the room when there are no more.
+     *
+     * @return bool Whether the room changed state.
+     */
+    public function advanceQuestion(): bool
+    {
+        if ($this->status !== self::STATUS_ACTIVE) {
+            return false;
+        }
+
+        $nextIndex = $this->current_question_index + 1;
+
+        if ($nextIndex >= $this->totalQuestions()) {
+            $this->update(['status' => self::STATUS_FINISHED]);
+
+            return true;
+        }
+
+        $this->update([
+            'current_question_index' => $nextIndex,
+            'question_started_at' => now(),
+        ]);
+
+        return true;
+    }
+
+    /**
      * Moment when the current question stops accepting answers.
      */
     public function questionEndsAt(): ?CarbonInterface

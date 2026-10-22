@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\QuestionBroadcast;
 use App\Events\ScoreboardUpdated;
 use App\Http\Requests\StoreRoomRequest;
 use App\Models\Room;
@@ -80,6 +81,16 @@ class RoomController extends Controller
 
         if ($participant === null) {
             $participant = $room->participants()->create(['name' => $data['name']]);
+
+            // The first participant starts the game automatically; subsequent
+            // joins only update the scoreboard.
+            if ($room->participants()->count() === 1) {
+                $question = $room->startGame();
+
+                if ($question !== null) {
+                    $this->broadcastSafely(new QuestionBroadcast($room, $question));
+                }
+            }
 
             $this->broadcastSafely(new ScoreboardUpdated($room));
         }

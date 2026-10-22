@@ -135,7 +135,7 @@
                 </div>
 
                 <p id="question-empty" class="mt-3 text-sm text-slate-500 @if ($currentQuestion !== null) hidden @endif">
-                    La trivia aún no ha iniciado. Comparte el código y pulsa «Iniciar trivia».
+                    La trivia aún no ha iniciado. Se inicia automáticamente al entrar el primer participante, o puedes pulsar «Iniciar trivia».
                 </p>
             </div>
 
