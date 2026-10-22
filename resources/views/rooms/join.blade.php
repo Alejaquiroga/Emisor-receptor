@@ -19,7 +19,7 @@
                     id="code"
                     type="text"
                     name="code"
-                    value="{{ old('code') }}"
+                    value="{{ old('code', $code) }}"
                     required
                     maxlength="6"
                     minlength="6"

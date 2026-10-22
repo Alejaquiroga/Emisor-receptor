@@ -34,6 +34,43 @@
             >
         </div>
 
+        <div>
+            <label for="admin_password" class="mb-1 block text-sm text-slate-300">PIN de administrador</label>
+            <input
+                id="admin_password"
+                type="text"
+                name="admin_password"
+                value="{{ old('admin_password') }}"
+                minlength="4"
+                maxlength="40"
+                required
+                autocomplete="off"
+                autocapitalize="off"
+                placeholder="Ej: demo"
+                class="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-white placeholder:text-slate-600 focus:border-indigo-500 focus:outline-none"
+            >
+            <p class="mt-1 text-xs text-slate-500">
+                Lo usarás para volver a entrar al panel de control desde otro dispositivo. Solo compártelo con quien organice la trivia.
+            </p>
+        </div>
+
+        <div>
+            <label for="seconds_per_question" class="mb-1 block text-sm text-slate-300">Segundos por pregunta</label>
+            <input
+                id="seconds_per_question"
+                type="number"
+                name="seconds_per_question"
+                value="{{ old('seconds_per_question', 30) }}"
+                min="5"
+                max="120"
+                required
+                class="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-white placeholder:text-slate-600 focus:border-indigo-500 focus:outline-none"
+            >
+            <p class="mt-1 text-xs text-slate-500">
+                Tiempo máximo para responder. Las respuestas más rápidas suman un bonus de hasta 100 puntos.
+            </p>
+        </div>
+
         <section>
             <div class="mb-3 flex items-center justify-between">
                 <h2 class="text-lg font-semibold">Preguntas</h2>

@@ -30,12 +30,22 @@
 
         <section id="question-state" class="space-y-4 @if ($currentQuestion === null) hidden @endif">
             <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
-                <p id="question-progress" class="text-xs font-semibold uppercase tracking-widest text-indigo-400">
-                    @if ($currentQuestion !== null)
-                        Pregunta {{ $room->current_question_index + 1 }} / {{ $room->totalQuestions() }}
-                    @endif
-                </p>
-                <p id="question-text" class="mt-2 text-2xl font-semibold leading-snug">
+                <div class="flex items-center justify-between gap-4">
+                    <p id="question-progress" class="text-xs font-semibold uppercase tracking-widest text-indigo-400">
+                        @if ($currentQuestion !== null)
+                            Pregunta {{ $room->current_question_index + 1 }} / {{ $room->totalQuestions() }}
+                        @endif
+                    </p>
+                    <p id="countdown" class="hidden rounded-xl bg-slate-800 px-3 py-1 font-mono text-sm text-slate-200">
+                        ⏱ -- s
+                    </p>
+                </div>
+
+                <div class="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-slate-800">
+                    <div id="countdown-bar" class="h-full w-full rounded-full bg-indigo-500 transition-[width] duration-200 ease-linear"></div>
+                </div>
+
+                <p id="question-text" class="mt-4 text-2xl font-semibold leading-snug">
                     {{ $currentQuestion?->question_text }}
                 </p>
 
@@ -90,6 +100,7 @@
         ]) }};
         const participant = {{ Js::from(['id' => $participant->id, 'name' => $participant->name]) }};
         const answerBaseUrl = {{ Js::from(route('game.play', [$room, $participant])) }} + '/questions/';
+        const stateUrl = {{ Js::from(route('rooms.state', $room)) }};
         const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
 
         let question = {{ Js::from($currentQuestion === null ? null : [
@@ -105,10 +116,20 @@
         let ranking = {{ Js::from($ranking) }};
         let submitting = false;
 
+        let secondsPerQuestion = {{ $room->seconds_per_question }};
+        const initialServerNowMs = {{ Js::from(now()->getTimestampMs()) }};
+        const initialEndsAtMs = {{ Js::from($room->questionEndsAt()?->getTimestampMs()) }};
+        const clockOffsetMs = Date.now() - initialServerNowMs;
+        let deadlineMs = initialEndsAtMs === null ? null : initialEndsAtMs + clockOffsetMs;
+        let countdownTimer = null;
+        let timeExpired = false;
+
         const waitingState = document.getElementById('waiting-state');
         const questionState = document.getElementById('question-state');
         const finishedState = document.getElementById('finished-state');
         const optionsEl = document.getElementById('options');
+        const countdownBadge = document.getElementById('countdown');
+        const countdownBar = document.getElementById('countdown-bar');
         const podium = document.getElementById('podium');
         const podiumEmpty = document.getElementById('podium-empty');
         const participantsCount = document.getElementById('participants-count');
@@ -158,6 +179,74 @@
             }
         }
 
+        function syncDeadline(endsAt, serverNow) {
+            if (!endsAt) {
+                deadlineMs = null;
+                return;
+            }
+
+            const offset = Date.now() - Date.parse(serverNow);
+            deadlineMs = Date.parse(endsAt) + offset;
+        }
+
+        function renderCountdown() {
+            if (deadlineMs === null) {
+                countdownBadge.classList.add('hidden');
+                countdownBar.style.width = '100%';
+                return;
+            }
+
+            const remaining = Math.max(0, deadlineMs - Date.now());
+            const total = Math.max(1, secondsPerQuestion * 1000);
+            const seconds = Math.ceil(remaining / 1000);
+
+            countdownBadge.textContent = `⏱ ${seconds} s`;
+            countdownBadge.classList.toggle('text-rose-300', seconds <= 5);
+            countdownBadge.classList.toggle('text-slate-200', seconds > 5);
+            countdownBar.style.width = `${Math.max(0, Math.min(100, (remaining / total) * 100))}%`;
+            countdownBar.classList.toggle('bg-rose-500', seconds <= 5);
+            countdownBar.classList.toggle('bg-indigo-500', seconds > 5);
+
+            if (remaining <= 0) {
+                handleTimeUp();
+            }
+        }
+
+        function startCountdown() {
+            clearInterval(countdownTimer);
+
+            if (deadlineMs === null || myAnswer !== null) {
+                return;
+            }
+
+            timeExpired = false;
+            countdownBadge.classList.remove('hidden');
+            renderCountdown();
+            countdownTimer = setInterval(renderCountdown, 200);
+        }
+
+        function stopCountdown() {
+            clearInterval(countdownTimer);
+            countdownTimer = null;
+        }
+
+        function handleTimeUp() {
+            if (timeExpired) {
+                return;
+            }
+
+            timeExpired = true;
+            stopCountdown();
+            countdownBadge.textContent = '⏱ 0 s';
+
+            if (myAnswer === null) {
+                optionsEl.querySelectorAll('.option-button').forEach((button) => {
+                    button.disabled = true;
+                });
+                showToast('Se acabó el tiempo', 'error');
+            }
+        }
+
         function renderPodium() {
             podiumEmpty.classList.toggle('hidden', ranking.length > 0);
             participantsCount.textContent = `${ranking.length} participantes`;
@@ -180,6 +269,9 @@
             if (myAnswer === null) {
                 return;
             }
+
+            stopCountdown();
+            countdownBadge.classList.add('hidden');
 
             optionsEl.querySelectorAll('.option-button').forEach((button) => {
                 const index = Number(button.dataset.option);
@@ -281,10 +373,13 @@
             window.Echo.channel(`room.${room.id}`)
                 .listen('.QuestionBroadcast', (payload) => {
                     question = payload.question;
+                    secondsPerQuestion = payload.seconds_per_question ?? secondsPerQuestion;
+                    syncDeadline(payload.ends_at, payload.server_now);
                     document.getElementById('question-progress').textContent =
                         `Pregunta ${payload.question_index + 1} / ${payload.total_questions}`;
                     renderQuestion();
                     showState('question');
+                    startCountdown();
                 })
                 .listen('.ScoreboardUpdated', (payload) => {
                     ranking = payload.ranking;
@@ -296,11 +391,58 @@
                     }
 
                     if (payload.status === 'finished') {
+                        stopCountdown();
+                        countdownBadge.classList.add('hidden');
                         showState('finished');
                     } else if (payload.status === 'waiting') {
+                        stopCountdown();
+                        countdownBadge.classList.add('hidden');
                         showState('waiting');
                     }
                 });
+        }
+
+        async function syncState() {
+            try {
+                const response = await fetch(stateUrl, { headers: { Accept: 'application/json' } });
+
+                if (!response.ok) {
+                    return;
+                }
+
+                const state = await response.json();
+
+                if (state.status === 'finished') {
+                    stopCountdown();
+                    countdownBadge.classList.add('hidden');
+                    showState('finished');
+                    return;
+                }
+
+                if (state.status === 'waiting') {
+                    stopCountdown();
+                    countdownBadge.classList.add('hidden');
+                    showState('waiting');
+                    return;
+                }
+
+                if (!state.question) {
+                    return;
+                }
+
+                if (question === null || question.id !== state.question.id) {
+                    question = state.question;
+                    secondsPerQuestion = state.seconds_per_question ?? secondsPerQuestion;
+                    syncDeadline(state.ends_at, state.server_now);
+                    document.getElementById('question-progress').textContent =
+                        `Pregunta ${state.question_index + 1} / ${state.total_questions}`;
+                    renderQuestion();
+                    showState('question');
+                    startCountdown();
+                }
+            } catch (error) {
+                // Polling is only a fallback for missed websocket events.
+            }
         }
 
         if (document.readyState === 'loading') {
@@ -311,5 +453,12 @@
 
         renderPodium();
         applyAnsweredStyles();
+        setInterval(syncState, 4000);
+
+        if (myAnswer === null && question !== null && room.status === 'active') {
+            startCountdown();
+        } else if (myAnswer === null) {
+            countdownBadge.classList.add('hidden');
+        }
     </script>
 @endpush

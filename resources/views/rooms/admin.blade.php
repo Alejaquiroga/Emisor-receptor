@@ -15,22 +15,56 @@
             <div>
                 <p class="text-xs font-semibold uppercase tracking-widest text-indigo-400">Panel de control</p>
                 <h1 class="text-2xl font-semibold">{{ $room->title }}</h1>
-                <p id="status-label" class="mt-1 text-sm text-slate-400">{{ $statusText }}</p>
+                <p id="status-label" class="mt-1 text-sm text-slate-400">{{ $statusText }} · {{ $room->seconds_per_question }} s por pregunta</p>
             </div>
 
-            <div class="text-right">
-                <p class="text-xs font-semibold uppercase tracking-widest text-slate-500">Código para unirse</p>
+            <form method="POST" action="{{ route('rooms.lock', $room) }}">
+                @csrf
                 <button
-                    type="button"
-                    id="copy-code"
-                    title="Copiar código"
-                    class="rounded-xl border border-dashed border-indigo-500/60 px-4 py-2 font-mono text-3xl tracking-[0.3em] text-indigo-300 transition hover:bg-indigo-500/10"
+                    type="submit"
+                    class="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300 transition hover:bg-slate-900"
                 >
-                    {{ $room->code }}
+                    Cerrar sesión de admin
                 </button>
-                <p id="copy-feedback" class="mt-1 h-4 text-xs text-emerald-400"></p>
-            </div>
+            </form>
         </header>
+
+        <section class="grid gap-6 rounded-2xl border border-slate-800 bg-slate-900/60 p-5 sm:grid-cols-[auto_1fr] sm:items-center">
+            <div class="flex justify-center">
+                <canvas
+                    id="join-qr"
+                    data-join-path="{{ $joinPath }}"
+                    width="180"
+                    height="180"
+                    aria-label="Código QR para unirse a la trivia"
+                    class="h-[180px] w-[180px] rounded-xl bg-slate-950"
+                ></canvas>
+            </div>
+
+            <div class="space-y-2 text-center sm:text-left">
+                <h2 class="text-sm font-semibold uppercase tracking-widest text-slate-500">Unirse a la sala</h2>
+                <p class="font-mono text-3xl tracking-[0.3em] text-indigo-300">{{ $room->code }}</p>
+                <p id="join-url" class="break-all text-sm text-slate-400">{{ $joinPath }}</p>
+                <div class="flex flex-wrap justify-center gap-2 sm:justify-start">
+                    <button
+                        type="button"
+                        id="copy-code"
+                        class="rounded-xl border border-dashed border-indigo-500/60 px-4 py-2 text-sm text-indigo-300 transition hover:bg-indigo-500/10"
+                    >
+                        Copiar código
+                    </button>
+                    <button
+                        type="button"
+                        id="copy-join-url"
+                        data-join-path="{{ $joinPath }}"
+                        class="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300 transition hover:bg-slate-900"
+                    >
+                        Copiar enlace
+                    </button>
+                </div>
+                <p id="copy-feedback" class="h-4 text-xs text-emerald-400"></p>
+            </div>
+        </section>
 
         <section class="flex flex-wrap gap-3">
             @if ($room->status === \App\Models\Room::STATUS_WAITING)
@@ -56,6 +90,15 @@
                     </button>
                 </form>
             @endif
+
+            <a
+                href="{{ route('rooms.screen', $room) }}"
+                target="_blank"
+                rel="noopener"
+                class="rounded-xl border border-indigo-500/60 px-5 py-3 text-sm text-indigo-300 transition hover:bg-indigo-500/10"
+            >
+                Abrir proyector ↗
+            </a>
 
             <button
                 type="button"
@@ -188,12 +231,23 @@
             statusLabel.textContent = statusLabels[status] ?? status;
         }
 
+        function showCopyFeedback(message) {
+            const feedback = document.getElementById('copy-feedback');
+            feedback.textContent = message;
+            setTimeout(() => {
+                feedback.textContent = '';
+            }, 2000);
+        }
+
         document.getElementById('copy-code').addEventListener('click', async () => {
             await navigator.clipboard.writeText({{ Js::from($room->code) }});
-            document.getElementById('copy-feedback').textContent = 'Código copiado';
-            setTimeout(() => {
-                document.getElementById('copy-feedback').textContent = '';
-            }, 2000);
+            showCopyFeedback('Código copiado');
+        });
+
+        document.getElementById('copy-join-url').addEventListener('click', async (event) => {
+            const url = new URL(event.currentTarget.dataset.joinPath, window.location.origin).toString();
+            await navigator.clipboard.writeText(url);
+            showCopyFeedback('Enlace copiado');
         });
 
         document.getElementById('refresh-participants').addEventListener('click', async () => {
