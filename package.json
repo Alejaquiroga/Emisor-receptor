@@ -4,7 +4,8 @@
     "type": "module",
     "scripts": {
         "build": "vite build",
-        "dev": "vite"
+        "dev": "vite",
+        "tunnel": "bash scripts/tunnel.sh"
     },
     "devDependencies": {
         "@tailwindcss/vite": "^4.0.0",

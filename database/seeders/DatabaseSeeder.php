@@ -22,6 +22,7 @@ class DatabaseSeeder extends Seeder
             ['name' => 'Test User', 'password' => 'password'],
         );
 
+        $this->call(DefaultTriviaSeeder::class);
         $this->call(DemoTriviaSeeder::class);
     }
 }
