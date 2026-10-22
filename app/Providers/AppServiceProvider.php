@@ -22,6 +22,7 @@ class AppServiceProvider extends ServiceProvider
     {
         if ($this->app->runningInConsole()) {
             DevCommands::artisan('reverb:start', 'reverb');
+            DevCommands::artisan('schedule:work', 'scheduler');
         }
     }
 }
